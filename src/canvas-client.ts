@@ -166,6 +166,14 @@ export class CanvasClient {
     }
 
     if (
+      contentType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+      contentType === "application/msword"
+    ) {
+      const text = await officeParser.parseOfficeAsync(buffer, { outputErrorToConsole: false });
+      return text || `[File "${file.display_name}" appears to be an empty document.]`;
+    }
+
+    if (
       contentType === "text/plain" ||
       contentType === "text/html" ||
       contentType.startsWith("text/")

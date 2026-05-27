@@ -76,11 +76,11 @@ Restart Claude Desktop and you're ready.
 | HTML pages | ✅ Full text |
 | PPTX (PowerPoint) | ✅ Full text |
 | PPT (legacy PowerPoint) | ✅ Full text |
-| DOCX / other formats | ⚠️ Coming soon |
+| DOCX (Word) | ✅ Full text |
+| DOC (legacy Word) | ✅ Full text |
 
 ## Roadmap
 
-- [ ] DOCX text extraction
 - [ ] Discussion post access
 - [ ] Announcement fetching
 - [ ] Semantic search across all course content
