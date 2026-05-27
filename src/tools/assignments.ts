@@ -42,7 +42,7 @@ export async function handleAssignmentTools(
               due_at: a.due_at,
               points: a.points_possible,
               submission_types: a.submission_types,
-              description: stripHtml(a.description).slice(0, 500),
+              description: stripHtml(a.description).slice(0, 10000),
             })),
             null,
             2
