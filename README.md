@@ -6,7 +6,7 @@ A Model Context Protocol server that gives Claude access to your Canvas LMS cour
 
 - **Browse courses** — see all your enrolled courses
 - **Explore modules** — understand how each course is structured
-- **Read files** — extract text from PDFs and lecture notes
+- **Read files** — extract text from PDFs, PowerPoints, and lecture notes
 - **Read pages** — access instructor-written wiki pages and summaries
 - **Check assignments** — see what's due and what topics to focus on
 
@@ -74,11 +74,13 @@ Restart Claude Desktop and you're ready.
 | PDF | ✅ Full text |
 | Plain text | ✅ Full text |
 | HTML pages | ✅ Full text |
-| PPTX / DOCX | ⚠️ Coming soon |
+| PPTX (PowerPoint) | ✅ Full text |
+| PPT (legacy PowerPoint) | ✅ Full text |
+| DOCX / other formats | ⚠️ Coming soon |
 
 ## Roadmap
 
-- [ ] PPTX and DOCX text extraction
+- [ ] DOCX text extraction
 - [ ] Discussion post access
 - [ ] Announcement fetching
 - [ ] Semantic search across all course content

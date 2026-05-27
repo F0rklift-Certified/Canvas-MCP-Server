@@ -1,6 +1,10 @@
 import axios, { AxiosInstance } from "axios";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const pdfParse = require("pdf-parse") as (buf: Buffer) => Promise<{ text: string }>;
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const officeParser = require("officeparser") as {
+  parseOfficeAsync: (input: Buffer, config?: Record<string, unknown>) => Promise<string>;
+};
 
 export interface Course {
   id: number;
@@ -154,6 +158,14 @@ export class CanvasClient {
     }
 
     if (
+      contentType === "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
+      contentType === "application/vnd.ms-powerpoint"
+    ) {
+      const text = await officeParser.parseOfficeAsync(buffer, { outputErrorToConsole: false });
+      return text || `[File "${file.display_name}" appears to be an empty or image-only presentation.]`;
+    }
+
+    if (
       contentType === "text/plain" ||
       contentType === "text/html" ||
       contentType.startsWith("text/")
@@ -161,7 +173,7 @@ export class CanvasClient {
       return buffer.toString("utf-8");
     }
 
-    // For unsupported types (pptx, docx, etc.) return a note
+    // For unsupported types (docx, etc.) return a note
     return `[File "${file.display_name}" is of type ${contentType} — text extraction not supported yet. File size: ${Math.round(file.size / 1024)}KB]`;
   }
 }
