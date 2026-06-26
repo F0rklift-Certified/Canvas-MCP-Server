@@ -136,7 +136,6 @@ export class CanvasClient {
   async getAssignments(courseId: number): Promise<Assignment[]> {
     return this.fetchAllPages<Assignment>(`/courses/${courseId}/assignments`, {
       order_by: "due_at",
-      include: ["description"],
     });
   }
 

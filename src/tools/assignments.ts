@@ -4,7 +4,7 @@ export const assignmentTools = [
   {
     name: "get_assignments",
     description:
-      "List all assignments for a course with due dates, point values, and descriptions. Useful for understanding what topics to focus study on.",
+      "List all assignments for a course with due dates and point values. Use get_assignment to fetch the full description and rubric for a specific one.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -60,7 +60,6 @@ export async function handleAssignmentTools(
               due_at: a.due_at,
               points: a.points_possible,
               submission_types: a.submission_types,
-              description: stripHtml(a.description).slice(0, 10000),
             })),
             null,
             2

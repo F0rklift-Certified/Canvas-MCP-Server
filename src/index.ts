@@ -76,7 +76,7 @@ server.tool(
 // --- Assignments ---
 server.tool(
   "get_assignments",
-  "List all assignments for a course with due dates and descriptions",
+  "List all assignments for a course with due dates and point values",
   { course_id: z.number().describe("The Canvas course ID") },
   async (args) => {
     return (await handleAssignmentTools("get_assignments", args, client))!;
