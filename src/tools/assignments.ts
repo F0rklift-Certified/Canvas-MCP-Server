@@ -4,7 +4,7 @@ export const assignmentTools = [
   {
     name: "get_assignments",
     description:
-      "List all assignments for a course with due dates and point values. Use get_assignment to fetch the full description and rubric for a specific one.",
+      "List all assignments for a course with due dates and point values. Use get_assignment_description to fetch the full description and rubric for a specific one.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -17,7 +17,7 @@ export const assignmentTools = [
     },
   },
   {
-    name: "get_assignment",
+    name: "get_assignment_description",
     description:
       "Get the full details of a single assignment — its complete description/instructions and grading rubric. Use this when working on one specific assignment, instead of fetching every assignment in the course.",
     inputSchema: {
@@ -69,7 +69,7 @@ export async function handleAssignmentTools(
     };
   }
 
-  if (toolName === "get_assignment") {
+  if (toolName === "get_assignment_description") {
     const courseId = args.course_id as number;
     const assignmentId = args.assignment_id as number;
     const a = await client.getAssignment(courseId, assignmentId);
