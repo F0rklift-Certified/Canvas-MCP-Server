@@ -76,10 +76,22 @@ server.tool(
 // --- Assignments ---
 server.tool(
   "get_assignments",
-  "List all assignments for a course with due dates and descriptions",
+  "List all assignments for a course with due dates and point values",
   { course_id: z.number().describe("The Canvas course ID") },
   async (args) => {
     return (await handleAssignmentTools("get_assignments", args, client))!;
+  }
+);
+
+server.tool(
+  "get_assignment_description",
+  "Get the full description/instructions and grading rubric for a single assignment",
+  {
+    course_id: z.number().describe("The Canvas course ID"),
+    assignment_id: z.number().describe("The assignment ID from get_assignments"),
+  },
+  async (args) => {
+    return (await handleAssignmentTools("get_assignment_description", args, client))!;
   }
 );
 

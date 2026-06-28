@@ -43,6 +43,14 @@ export interface CanvasFile {
   updated_at: string;
 }
 
+export interface RubricCriterion {
+  id: string;
+  description: string;
+  long_description?: string;
+  points: number;
+  ratings?: { description: string; long_description?: string; points: number }[];
+}
+
 export interface Assignment {
   id: number;
   name: string;
@@ -51,6 +59,7 @@ export interface Assignment {
   points_possible: number;
   submission_types: string[];
   course_id: number;
+  rubric?: RubricCriterion[];
 }
 
 export interface Page {
@@ -127,8 +136,14 @@ export class CanvasClient {
   async getAssignments(courseId: number): Promise<Assignment[]> {
     return this.fetchAllPages<Assignment>(`/courses/${courseId}/assignments`, {
       order_by: "due_at",
-      include: ["description"],
     });
+  }
+
+  async getAssignment(courseId: number, assignmentId: number): Promise<Assignment> {
+    const res = await this.http.get<Assignment>(
+      `/courses/${courseId}/assignments/${assignmentId}`
+    );
+    return res.data;
   }
 
   async getPage(courseId: number, pageUrl: string): Promise<Page> {
