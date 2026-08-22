@@ -3,7 +3,7 @@ import axios, { AxiosInstance } from "axios";
 const pdfParse = require("pdf-parse") as (buf: Buffer) => Promise<{ text: string }>;
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const officeParser = require("officeparser") as {
-  parseOfficeAsync: (input: Buffer, config?: Record<string, unknown>) => Promise<string>;
+  parseOffice: (input: Buffer, config?: Record<string, unknown>) => Promise<{ toText: () => string } | string>;
 };
 
 export interface Course {
@@ -128,9 +128,49 @@ export class CanvasClient {
     });
   }
 
-  async getFile(fileId: number): Promise<CanvasFile> {
+  async getFile(fileId: number, courseId?: number): Promise<CanvasFile> {
+    // Prefer course-scoped endpoint — many institutions block the global /files/:id for students
+    if (courseId) {
+      try {
+        const res = await this.http.get<CanvasFile>(
+          `/courses/${courseId}/files/${fileId}`
+        );
+        return res.data;
+      } catch {
+        // Fall through to global endpoint
+      }
+    }
+
     const res = await this.http.get<CanvasFile>(`/files/${fileId}`);
     return res.data;
+  }
+
+  /**
+   * Attempt to resolve a file's download URL by finding it in course module items.
+   * Useful when both /files/:id and /courses/:id/files/:id return 403.
+   */
+  async getFileUrlFromModules(
+    courseId: number,
+    fileId: number
+  ): Promise<CanvasFile | null> {
+    const modules = await this.getModules(courseId);
+
+    for (const mod of modules) {
+      const items = await this.getModuleItems(courseId, mod.id);
+      for (const item of items) {
+        if (item.type === "File" && item.content_id === fileId && item.url) {
+          // item.url is the Canvas API URL for the file — fetch it to get the full file object
+          try {
+            const res = await this.http.get<CanvasFile>(item.url);
+            return res.data;
+          } catch {
+            // continue scanning
+          }
+        }
+      }
+    }
+
+    return null;
   }
 
   async getAssignments(courseId: number): Promise<Assignment[]> {
@@ -159,13 +199,39 @@ export class CanvasClient {
 
   // Download a Canvas file and extract its text content
   async extractFileText(file: CanvasFile): Promise<string> {
-    const response = await axios.get<ArrayBuffer>(file.url, {
-      responseType: "arraybuffer",
-      // Canvas file URLs are pre-authenticated, no token needed
-    });
+    // Download using the authenticated client — many institutions (e.g. those with SSO)
+    // require the bearer token even for the file download URL.
+    let buffer: Buffer;
 
-    const buffer = Buffer.from(response.data);
-    const contentType = file.content_type;
+    try {
+      // Use the file's download URL with auth headers
+      const response = await this.http.get<ArrayBuffer>(file.url, {
+        responseType: "arraybuffer",
+        maxRedirects: 5,
+      });
+      buffer = Buffer.from(response.data);
+    } catch {
+      // Fallback: try without auth (for institutions where the URL is truly pre-authenticated)
+      const response = await axios.get<ArrayBuffer>(file.url, {
+        responseType: "arraybuffer",
+        maxRedirects: 5,
+      });
+      buffer = Buffer.from(response.data);
+    }
+
+    // Verify we didn't get an HTML login page
+    const head = buffer.toString("utf-8", 0, 100);
+    if (head.includes("<!DOCTYPE") || head.includes("<html")) {
+      throw new Error(
+        `File download returned an HTML page (likely SSO redirect). File "${file.display_name}" cannot be downloaded with the current token.`
+      );
+    }
+
+    // Canvas sometimes returns "content-type" (hyphenated) instead of "content_type"
+    const contentType =
+      file.content_type ||
+      (file as unknown as Record<string, string>)["content-type"] ||
+      this.inferContentType(file.filename || file.display_name);
 
     if (contentType === "application/pdf") {
       const data = await pdfParse(buffer);
@@ -176,7 +242,9 @@ export class CanvasClient {
       contentType === "application/vnd.openxmlformats-officedocument.presentationml.presentation" ||
       contentType === "application/vnd.ms-powerpoint"
     ) {
-      const text = await officeParser.parseOfficeAsync(buffer, { outputErrorToConsole: false });
+      const ext = file.filename?.split(".").pop()?.toLowerCase() || "pptx";
+      const result = await officeParser.parseOffice(buffer, { outputErrorToConsole: false, fileType: ext });
+      const text = typeof result === "string" ? result : result?.toText?.() || "";
       return text || `[File "${file.display_name}" appears to be an empty or image-only presentation.]`;
     }
 
@@ -184,19 +252,38 @@ export class CanvasClient {
       contentType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
       contentType === "application/msword"
     ) {
-      const text = await officeParser.parseOfficeAsync(buffer, { outputErrorToConsole: false });
+      const ext = file.filename?.split(".").pop()?.toLowerCase() || "docx";
+      const result = await officeParser.parseOffice(buffer, { outputErrorToConsole: false, fileType: ext });
+      const text = typeof result === "string" ? result : result?.toText?.() || "";
       return text || `[File "${file.display_name}" appears to be an empty document.]`;
     }
 
     if (
       contentType === "text/plain" ||
       contentType === "text/html" ||
-      contentType.startsWith("text/")
+      contentType?.startsWith("text/")
     ) {
       return buffer.toString("utf-8");
     }
 
-    // For unsupported types (docx, etc.) return a note
-    return `[File "${file.display_name}" is of type ${contentType} — text extraction not supported yet. File size: ${Math.round(file.size / 1024)}KB]`;
+    // For unsupported types return a note
+    return `[File "${file.display_name}" is of type ${contentType || "unknown"} — text extraction not supported yet. File size: ${Math.round(file.size / 1024)}KB]`;
+  }
+
+  private inferContentType(filename: string): string | undefined {
+    const ext = filename.split(".").pop()?.toLowerCase();
+    const map: Record<string, string> = {
+      pdf: "application/pdf",
+      pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      ppt: "application/vnd.ms-powerpoint",
+      docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      doc: "application/msword",
+      txt: "text/plain",
+      html: "text/html",
+      htm: "text/html",
+      csv: "text/csv",
+      md: "text/plain",
+    };
+    return ext ? map[ext] : undefined;
   }
 }

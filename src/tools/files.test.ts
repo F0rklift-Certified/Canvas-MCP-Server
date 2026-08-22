@@ -35,14 +35,15 @@ test("get_files returns metadata with size converted to KB", async () => {
 
 test("get_file_content prepends a header and returns extracted text", async () => {
   const client = makeFakeClient({
-    getFile: async (fileId: number) => {
+    getFile: async (fileId: number, courseId?: number) => {
       assert.equal(fileId, 12);
+      assert.equal(courseId, 3);
       return file({ id: 12, display_name: "Lecture.pdf" });
     },
     extractFileText: async () => "Mitochondria is the powerhouse of the cell.",
   });
 
-  const result = await handleFileTools("get_file_content", { file_id: 12 }, client);
+  const result = await handleFileTools("get_file_content", { file_id: 12, course_id: 3 }, client);
   const text = textResult(result);
 
   assert.match(text, /# Lecture\.pdf/);
@@ -57,7 +58,7 @@ test("get_file_content truncates very large files", async () => {
     extractFileText: async () => big,
   });
 
-  const result = await handleFileTools("get_file_content", { file_id: 1 }, client);
+  const result = await handleFileTools("get_file_content", { file_id: 1, course_id: 3 }, client);
   const text = textResult(result);
 
   assert.match(text, /content truncated, file too large/);

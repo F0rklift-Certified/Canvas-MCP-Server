@@ -16,6 +16,7 @@ export function makeFakeClient(overrides: Partial<CanvasClient>): CanvasClient {
     getModuleItems: notStubbed("getModuleItems"),
     getFiles: notStubbed("getFiles"),
     getFile: notStubbed("getFile"),
+    getFileUrlFromModules: notStubbed("getFileUrlFromModules"),
     getAssignments: notStubbed("getAssignments"),
     getAssignment: notStubbed("getAssignment"),
     getPage: notStubbed("getPage"),

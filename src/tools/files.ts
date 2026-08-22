@@ -20,7 +20,7 @@ export const fileTools = [
   {
     name: "get_file_content",
     description:
-      "Download and extract text content from a Canvas file. Supports PDF and plain text files. Use this to read lecture notes, readings, or slides as study context.",
+      "Download and extract text content from a Canvas file. Supports PDF, Word, PowerPoint, and plain text files. Use this to read lecture notes, readings, or slides as study context. Always provide course_id to avoid 403 errors on institutions that restrict direct file access.",
     inputSchema: {
       type: "object" as const,
       properties: {
@@ -28,8 +28,13 @@ export const fileTools = [
           type: "number",
           description: "The file ID (from get_files or get_module_items)",
         },
+        course_id: {
+          type: "number",
+          description:
+            "The Canvas course ID. Required for institutions that restrict direct file access (most universities).",
+        },
       },
-      required: ["file_id"],
+      required: ["file_id", "course_id"],
     },
   },
 ];
@@ -119,7 +124,7 @@ export async function handleFileTools(
               text:
                 `⚠️ File listing returned HTTP ${status} — direct file browsing is restricted. Found ${files.length} file(s) linked in modules:\n\n` +
                 JSON.stringify(files, null, 2) +
-                `\n\nUse get_file_content with the content_id as file_id to attempt reading these files.`,
+                `\n\nUse get_file_content with the content_id as file_id and course_id: ${courseId} to read these files.`,
             },
           ],
         };
@@ -131,9 +136,78 @@ export async function handleFileTools(
 
   if (toolName === "get_file_content") {
     const fileId = args.file_id as number;
+    const courseId = args.course_id as number | undefined;
 
+    /**
+     * Strategy for resolving a file when institutions block direct access:
+     * 1. Try course-scoped endpoint: /courses/:id/files/:id (needs course_id)
+     * 2. Try global endpoint: /files/:id
+     * 3. Fallback: scan module items for the file's API URL
+     */
+    let file = null;
+
+    // Attempt to get file metadata (course-scoped first if course_id provided)
     try {
-      const file = await client.getFile(fileId);
+      file = await client.getFile(fileId, courseId);
+    } catch (err) {
+      const axiosErr = err as AxiosError;
+      const status = axiosErr?.response?.status;
+
+      if ((status === 403 || status === 401) && courseId) {
+        // Both direct endpoints failed — try resolving via module items
+        file = await client.getFileUrlFromModules(courseId, fileId);
+
+        if (!file) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text:
+                  `⚠️ Cannot access file ${fileId} (HTTP ${status}). Your institution restricts file access for students.\n\n` +
+                  `The file could not be resolved through module items either.\n\n` +
+                  `Tip: The content may be available through assignment descriptions or page content instead.`,
+              },
+            ],
+          };
+        }
+      } else if (status === 403 || status === 401) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text:
+                `⚠️ Cannot access file ${fileId} (HTTP ${status}). Your institution restricts file downloads.\n\n` +
+                `Tip: Provide the course_id parameter so the tool can try alternative access methods.`,
+            },
+          ],
+        };
+      } else if (status === 404) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `⚠️ File ${fileId} not found (HTTP 404). It may have been removed or the ID may be incorrect.`,
+            },
+          ],
+        };
+      } else {
+        throw err;
+      }
+    }
+
+    if (!file) {
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `⚠️ Could not resolve file ${fileId}. Try providing a course_id for alternative access methods.`,
+          },
+        ],
+      };
+    }
+
+    // Now download and extract text
+    try {
       const text = await client.extractFileText(file);
 
       // Truncate very large files to avoid overwhelming context
@@ -161,19 +235,9 @@ export async function handleFileTools(
             {
               type: "text" as const,
               text:
-                `⚠️ Cannot access file ${fileId} (HTTP ${status}). Your institution restricts file downloads for this course.\n\n` +
-                `Tip: The content may be available through assignment descriptions or page content instead.`,
-            },
-          ],
-        };
-      }
-
-      if (status === 404) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `⚠️ File ${fileId} not found (HTTP 404). It may have been removed or the ID may be incorrect.`,
+                `⚠️ File metadata was retrieved but the download URL returned HTTP ${status}.\n\n` +
+                `File: ${file.display_name} (${file.content_type})\n\n` +
+                `Your institution may restrict file downloads even when metadata is accessible.`,
             },
           ],
         };
